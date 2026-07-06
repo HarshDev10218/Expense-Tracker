@@ -2,8 +2,11 @@
 let state = {
     budget: parseFloat(localStorage.getItem('budget')) || 0,
     expenses: JSON.parse(localStorage.getItem('expenses')) || [],
-    editingId: null // Tracks which item is currently being edited
+    editingId: null
 };
+
+// Chart Instance Variable
+let expenseChartInstance = null;
 
 // DOM Selectors
 const budgetInput = document.getElementById('budget-input');
@@ -24,6 +27,7 @@ const submitBtn = expenseForm.querySelector('.btn-submit');
 function init() {
     updateDashboard();
     renderExpenses(state.expenses);
+    updateChart();
 }
 
 // Global Financial Calculations
@@ -44,6 +48,43 @@ function updateDashboard() {
     } else {
         balanceDisplay.style.color = 'var(--success)';
     }
+}
+
+// Dynamic Habits Chart Core Engine
+function updateChart() {
+    const ctx = document.getElementById('expenseChart').getContext('2d');
+    
+    // Aggregate structural totals per unique spending category
+    const categories = ['Food', 'Software', 'Hardware', 'Marketing', 'Other'];
+    const dynamicTotals = categories.map(cat => {
+        return state.expenses
+            .filter(exp => exp.category === cat)
+            .reduce((sum, item) => sum + item.amount, 0);
+    });
+
+    // Destroy previous Chart references to prevent active layout canvas memory leaks
+    if (expenseChartInstance) {
+        expenseChartInstance.destroy();
+    }
+
+    // Paint modern visualization layout
+    expenseChartInstance = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: categories,
+            datasets: [{
+                data: dynamicTotals,
+                backgroundColor: ['#f59e0b', '#3b82f6', '#10b981', '#ec4899', '#6b7280'],
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { position: 'bottom' }
+            }
+        }
+    });
 }
 
 // Render dynamic table updates
@@ -75,7 +116,7 @@ function renderExpenses(expensesToRender) {
     });
 }
 
-// Budget Setup with safety threshold checks
+// Budget Setup Handler
 setBudgetBtn.addEventListener('click', () => {
     const val = parseFloat(budgetInput.value);
     if (isNaN(val) || val < 0) {
@@ -107,7 +148,6 @@ expenseForm.addEventListener('submit', (e) => {
     }
 
     if (state.editingId !== null) {
-        // --- EDIT MODE ---
         state.expenses = state.expenses.map(item => {
             if (item.id === state.editingId) {
                 return {
@@ -122,10 +162,7 @@ expenseForm.addEventListener('submit', (e) => {
         state.editingId = null;
         submitBtn.textContent = "Add Transaction";
         submitBtn.style.background = "var(--primary)";
-        
-        // Keep active filter context intact during mutations
     } else {
-        // --- CREATE MODE ---
         const newExpense = {
             id: Date.now(),
             title: expTitle.value.trim(),
@@ -133,17 +170,15 @@ expenseForm.addEventListener('submit', (e) => {
             category: expCategory.value
         };
         state.expenses.push(newExpense);
-        
-        // Reset category filter when creating, making the new transaction visible immediately
         filterCategory.value = 'All';
     }
 
     localStorage.setItem('expenses', JSON.stringify(state.expenses));
     
-    // Reset form field inputs & apply UI pipeline modifications
     expenseForm.reset();
     updateDashboard();
     applyFilter();
+    updateChart(); // Pipeline updates metrics presentation
 });
 
 // Setup form state for updating records
@@ -160,7 +195,7 @@ window.startEdit = function(id) {
     submitBtn.textContent = "Update Transaction Details";
     submitBtn.style.background = "#f59e0b";
     
-    applyFilter(); // Re-render inside existing bounds to preserve focus highlights safely
+    applyFilter();
 };
 
 window.deleteExpense = function(id) {
@@ -175,6 +210,7 @@ window.deleteExpense = function(id) {
     localStorage.setItem('expenses', JSON.stringify(state.expenses));
     updateDashboard();
     applyFilter();
+    updateChart(); // Dynamic metrics calculation pass
 };
 
 // Filter View Engine
